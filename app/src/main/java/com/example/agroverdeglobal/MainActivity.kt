@@ -36,17 +36,59 @@ import com.example.agroverdeglobal.ui.theme.AgroVerdeGlobalTheme
 
 data class EnvironmentalMeasurement(
     val name: String,
-    val value: String,
+    val value: Double,
     val unit: String,
-    val status: String = "Normal"
+    val type: MeasurementType
+)
+
+enum class MeasurementType {
+    TEMPERATURE,
+    AMBIENT_HUMIDITY,
+    SOIL_HUMIDITY,
+    LIGHT_LEVEL
+}
+
+data class EnvironmentalStatus(
+    val isAlert: Boolean,
+    val message: String
 )
 
 private val simulatedMeasurements = listOf(
-    EnvironmentalMeasurement("Temperatura", "24.8", "°C"),
-    EnvironmentalMeasurement("Humedad ambiental", "65", "%"),
-    EnvironmentalMeasurement("Humedad del suelo", "55", "%"),
-    EnvironmentalMeasurement("Nivel de luz", "70", "%")
+    EnvironmentalMeasurement("Temperatura", 24.8, "°C", MeasurementType.TEMPERATURE),
+    EnvironmentalMeasurement("Humedad ambiental", 65.0, "%", MeasurementType.AMBIENT_HUMIDITY),
+    EnvironmentalMeasurement("Humedad del suelo", 55.0, "%", MeasurementType.SOIL_HUMIDITY),
+    EnvironmentalMeasurement("Nivel de luz", 70.0, "%", MeasurementType.LIGHT_LEVEL)
 )
+
+fun evaluateEnvironmentalStatus(measurement: EnvironmentalMeasurement): EnvironmentalStatus {
+    val rule = when (measurement.type) {
+        MeasurementType.TEMPERATURE -> MeasurementRule(18.0, 30.0, "Temperatura", "baja", "alta")
+        MeasurementType.AMBIENT_HUMIDITY -> MeasurementRule(40.0, 80.0, "Humedad ambiental", "baja", "alta")
+        MeasurementType.SOIL_HUMIDITY -> MeasurementRule(30.0, 80.0, "Humedad del suelo", "baja", "alta")
+        MeasurementType.LIGHT_LEVEL -> MeasurementRule(20.0, 90.0, "Nivel de luz", "bajo", "alto")
+    }
+
+    return when {
+        measurement.value < rule.minimum -> EnvironmentalStatus(true, "${rule.label} ${rule.lowDescription}")
+        measurement.value > rule.maximum -> EnvironmentalStatus(true, "${rule.label} ${rule.highDescription}")
+        else -> EnvironmentalStatus(false, "Normal")
+    }
+}
+
+private data class MeasurementRule(
+    val minimum: Double,
+    val maximum: Double,
+    val label: String,
+    val lowDescription: String,
+    val highDescription: String
+)
+
+fun overallEnvironmentalMessage(statuses: List<EnvironmentalStatus>): String =
+    if (statuses.any { it.isAlert }) {
+        "Alerta: se detectaron condiciones ambientales críticas"
+    } else {
+        "Condiciones ambientales normales"
+    }
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -62,6 +104,7 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun AgroVerdeApp() {
+    val measurementsWithStatus = simulatedMeasurements.map { it to evaluateEnvironmentalStatus(it) }
     Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
         Column(
             modifier = Modifier.fillMaxSize().padding(innerPadding)
@@ -73,14 +116,21 @@ fun AgroVerdeApp() {
             Text("Monitoreo del invernadero", style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(modifier = Modifier.height(4.dp))
-            simulatedMeasurements.forEach { EnvironmentalMeasurementCard(it) }
-            OverallStatusIndicator()
+            measurementsWithStatus.forEach { (measurement, status) ->
+                EnvironmentalMeasurementCard(measurement, status)
+            }
+            OverallStatusIndicator(measurementsWithStatus.map { it.second })
         }
     }
 }
 
 @Composable
-fun EnvironmentalMeasurementCard(measurement: EnvironmentalMeasurement) {
+fun EnvironmentalMeasurementCard(measurement: EnvironmentalMeasurement, status: EnvironmentalStatus) {
+    val statusColor = if (status.isAlert) {
+        MaterialTheme.colorScheme.error
+    } else {
+        MaterialTheme.colorScheme.primary
+    }
     Card(
         modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
@@ -89,37 +139,44 @@ fun EnvironmentalMeasurementCard(measurement: EnvironmentalMeasurement) {
             Text(measurement.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Spacer(modifier = Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.Bottom) {
-                Text(measurement.value, style = MaterialTheme.typography.headlineLarge,
+                Text(formatMeasurementValue(measurement.value), style = MaterialTheme.typography.headlineLarge,
                     fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(measurement.unit, style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(bottom = 5.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Spacer(modifier = Modifier.height(14.dp))
-            StatusLabel(measurement.status)
+            StatusLabel(status.message, statusColor)
         }
     }
 }
 
 @Composable
-private fun StatusLabel(status: String) {
+private fun StatusLabel(status: String, color: androidx.compose.ui.graphics.Color) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Spacer(modifier = Modifier.size(10.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary))
+        Spacer(modifier = Modifier.size(10.dp).clip(CircleShape).background(color))
         Spacer(modifier = Modifier.width(8.dp))
-        Text(status, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary,
+        Text(status, style = MaterialTheme.typography.labelLarge, color = color,
             fontWeight = FontWeight.Medium)
     }
 }
 
 @Composable
-private fun OverallStatusIndicator() {
+private fun OverallStatusIndicator(statuses: List<EnvironmentalStatus>) {
+    val hasAlerts = statuses.any { it.isAlert }
+    val containerColor = if (hasAlerts) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer
+    val contentColor = if (hasAlerts) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer
+    val message = overallEnvironmentalMessage(statuses)
     Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.primaryContainer) {
-        Text("Condiciones ambientales normales", modifier = Modifier.padding(20.dp),
-            style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onPrimaryContainer,
+        color = containerColor) {
+        Text(message, modifier = Modifier.padding(20.dp),
+            style = MaterialTheme.typography.titleSmall, color = contentColor,
             fontWeight = FontWeight.SemiBold)
     }
 }
+
+private fun formatMeasurementValue(value: Double): String =
+    if (value % 1.0 == 0.0) value.toInt().toString() else value.toString()
 
 @Preview(showBackground = true)
 @Composable
