@@ -53,13 +53,6 @@ data class EnvironmentalStatus(
     val message: String
 )
 
-private val simulatedMeasurements = listOf(
-    EnvironmentalMeasurement("Temperatura", 24.8, "°C", MeasurementType.TEMPERATURE),
-    EnvironmentalMeasurement("Humedad ambiental", 65.0, "%", MeasurementType.AMBIENT_HUMIDITY),
-    EnvironmentalMeasurement("Humedad del suelo", 55.0, "%", MeasurementType.SOIL_HUMIDITY),
-    EnvironmentalMeasurement("Nivel de luz", 70.0, "%", MeasurementType.LIGHT_LEVEL)
-)
-
 fun evaluateEnvironmentalStatus(measurement: EnvironmentalMeasurement): EnvironmentalStatus {
     val rule = when (measurement.type) {
         MeasurementType.TEMPERATURE -> MeasurementRule(18.0, 30.0, "Temperatura", "baja", "alta")
@@ -104,7 +97,9 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun AgroVerdeApp() {
-    val measurementsWithStatus = simulatedMeasurements.map { it to evaluateEnvironmentalStatus(it) }
+    val lecturaAmbiental = FuenteDatosAmbientalesSimulada.obtenerLectura()
+    val measurementsWithStatus = lecturaAmbiental.toEnvironmentalMeasurements()
+        .map { it to evaluateEnvironmentalStatus(it) }
     Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
         Column(
             modifier = Modifier.fillMaxSize().padding(innerPadding)
@@ -114,6 +109,8 @@ fun AgroVerdeApp() {
             Text("AgroVerde Global", style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
             Text("Monitoreo del invernadero", style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Datos del sistema de monitoreo", style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(modifier = Modifier.height(4.dp))
             measurementsWithStatus.forEach { (measurement, status) ->
